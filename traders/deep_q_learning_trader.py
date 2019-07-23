@@ -99,13 +99,69 @@ class DeepQLearningTrader(ITrader):
         assert stock_market_data.get_companies() == [Company.A, Company.B]
 
         # TODO Compute the current state
+        stock_data_a = stock_market_data[Company.A]
+        vote_a = self.expert_a.vote(stock_data_a)
+        stock_data_b = stock_market_data[Company.B]
+        vote_b = self.expert_a.vote(stock_data_b)
+
+        curr_state = (
+            #portfolio.cash,
+            #portfolio.stocks[Company.A],
+            #portfolio.stocks[Company.B],
+            #stock_market_data.get_most_recent_price(Company.A),
+            #stock_market_data.get_most_recent_price(Company.B),
+            vote_a,
+            vote_b,
+        )
+
 
         # TODO Store state as experience (memory) and train the neural network only if trade() was called before at least once
+        # <s, a, r, s'>
+        trade_called_once_before = (curr_state is not None)
+        experience = (self.last_state, self.last_action_a, self.last_action_b, self.last_portfolio_value, curr_state)
+        self.memory.append(experience)
+        if trade_called_once_before and self.min_size_of_memory_before_training < len(self.memory):
+            # create self.batch_size-times random numbers
+            # between 0 and length of queue
+            # reverse the list, so pop() with indices works out
+            selected_mems_ind = random.sample(range(0, len(self.memory)), self.batch_size)[::-1]
+            selected_mems = [self.memory.pop(i) for i in selected_mems_ind]
+            # mem[:2] -> s, a
+            # mem[2] -> r
+            X = [mem[:2] for mem in selected_mems]
+            Y = [mem[2] for mem in selected_mems]
+            # model.fit(X, Y, batch_size=self.batch_size)
+            pass
 
         # TODO Create actions for current state and decrease epsilon for fewer random actions
+        # Order(OrderType.SELL, company, amount_to_sell)
+        """10 actions:
+        - buy  100% A, buy    0% B  # buy only A completely
+        - buy    0% A, buy  100% B  # buy only B completely
+        - buy   50% A, buy   50% B  # buy both
+        - hold                      # do nothing
+        - sell 100% A, sell   0% B  # sell only A completely
+        - sell   0% A, sell 100% B  # sell only B completely
+        - sell 100% A, sell 100% B  # sell both completely
+        - sell  50% A, sell  50% B  # sell both half
+        - buy  100% A, sell 100% B  # sell all B, buy all A
+        - sell 100% A, buy  100% B  # sell all A, buy all B
+        """
+        curr_action_a, curr_action_b = choose_actions(, epsilon=self.epsilon)
+        curr_portfolio_value = portfolio.get_value(stock_market_data)
+
+        if self.epsilon > self.epsilon_min:
+            self.epsilon *= self.epsilon_decay
+            self.epsilon_decay = 0.999
+
 
         # TODO Save created state, actions and portfolio value for the next call of trade()
+        self.last_state = curr_state
+        self.last_action_a = curr_action_a
+        self.last_action_b = curr_action_b
+        self.last_portfolio_value = curr_portfolio_value
 
+        return [curr_action_a, curr_action_b]
 
 # This method retrains the traders from scratch using training data from TRAINING and test data from TESTING
 EPISODES = 5
