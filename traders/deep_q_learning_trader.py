@@ -83,9 +83,9 @@ class DeepQLearningTrader(ITrader):
         self.model.compile(loss='mse', optimizer=Adam(lr=self.learning_rate))
 
         self.vote_map = {
-            Vote.HOLD : 0,
-            Vote.BUY : 1,
-            Vote.SELL : 2,
+            Vote.SELL : 0,
+            Vote.HOLD : 1,
+            Vote.BUY : 2,
         }
 
         self.vote_map_inverse = {v: k for k, v in self.vote_map.items()}
@@ -117,13 +117,15 @@ class DeepQLearningTrader(ITrader):
 
         # TODO Compute the current state
         stock_data_a = stock_market_data[Company.A]
-        vote_a = self.expert_a.vote(stock_data_a)
+        vote_a_for_a = self.expert_a.vote(stock_data_a)
+        vote_b_for_a = self.expert_b.vote(stock_data_a)
         #stock_data_b = stock_market_data[Company.B]
         #vote_b = self.expert_a.vote(stock_data_b)
-        state = np.array([[self.vote_map[vote_a]]])#, self.vote_map[vote_b]])
+        state = np.array([[self.vote_map[vote_a_for_a] + self.vote_map[vote_b_for_a]]])#, self.vote_map[vote_b]])
 
         # do action 0 or 1?
-        action = np.argmax(self.model.predict(state))
+        predictions = self.model.predict(state)
+        action = np.argmax(predictions)
 
         most_recent_price = stock_market_data.get_most_recent_price(Company.A)
         order_list = []
@@ -143,14 +145,15 @@ class DeepQLearningTrader(ITrader):
 
         if self.last_state is not None:
             # train
+            diff = (portfolio.get_value(stock_market_data) / self.last_portfolio_value - 1)
             if self.last_action_a == 0:
-                action_vec = np.array([[portfolio.get_value(stock_market_data), 0]])
+                rec_vec = np.array([[diff, -diff]])
             elif self.last_action_a == 1:
-                action_vec = np.array([[0, portfolio.get_value(stock_market_data)]])
+                rec_vec = np.array([[-diff, diff]])
             else:
                 assert False # wtf
             #reward_vec = np.array([[portfolio.get_value(stock_market_data)]])
-            self.model.fit(self.last_state, action_vec)
+            self.model.fit(self.last_state, rec_vec)
         
         self.last_state = state
         self.last_action_a = action
@@ -172,6 +175,10 @@ if __name__ == "__main__":
     # Hint: You can crop the training data with training_data.deepcopy_first_n_items(n)
     training_data = StockMarketData([Company.A, Company.B], [Period.TRAINING])
     testing_data = StockMarketData([Company.A, Company.B], [Period.TESTING])
+
+    training_data = training_data.deepcopy_first_n_items(6000)
+    # 12588
+    #print(f'training_data[Company.A].get_row_count(): {training_data[Company.A].get_row_count()}')
 
     # Create the stock exchange and one traders to train the net
     stock_exchange = stock_exchange.StockExchange(10000.0)
