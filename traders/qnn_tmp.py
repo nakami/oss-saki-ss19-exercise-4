@@ -61,6 +61,7 @@ class DeepQLearningTrader(ITrader):
         self.batch_size = 64
         self.min_size_of_memory_before_training = 1000  # should be way bigger than batch_size, but smaller than memory
         self.memory = deque(maxlen=2000)
+        self.gamma = 0.9
 
         # Attributes necessary to remember our last actions and fill our memory with experiences
         self.last_state = None
@@ -184,9 +185,22 @@ class DeepQLearningTrader(ITrader):
             # train
             diff_a = (current_price_a / self.last_price_a - 1)
             diff_b = (current_price_b / self.last_price_b - 1)
-            reward_vec = np.array([[diff_a, -diff_a, diff_b, -diff_b]])
+            fut_reward_a_buy = np.max(predictions[0][0])
+            fut_reward_a_buy = fut_reward_a_buy if fut_reward_a_buy > 0 else 0
+            fut_reward_a_sell = np.max(predictions[0][1])
+            fut_reward_a_sell = fut_reward_a_sell if fut_reward_a_sell > 0 else 0
+            fut_reward_b_buy = np.max(predictions[0][2])
+            fut_reward_b_buy = fut_reward_b_buy if fut_reward_b_buy > 0 else 0
+            fut_reward_b_sell = np.max(predictions[0][3])
+            fut_reward_b_sell = fut_reward_b_sell if fut_reward_b_sell > 0 else 0
+            reward_vec = np.array([[
+                diff_a + self.gamma * fut_reward_a_buy,
+                -diff_a + self.gamma * fut_reward_a_sell,
+                diff_b + self.gamma * fut_reward_b_buy,
+                -diff_b  + self.gamma * fut_reward_b_sell
+                ]])
             #reward_vec = np.array([[portfolio.get_value(stock_market_data)]])
-            self.model.fit(self.last_state, reward_vec)
+            self.model.fit(self.last_state, reward_vec, verbose=0)
         
         self.last_state = state
         self.last_action_a = action_A

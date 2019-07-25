@@ -56,7 +56,7 @@ class DeepQLearningTrader(ITrader):
         # Parameters for deep Q-learning
         self.learning_rate = 0.001
         self.epsilon = 1.0
-        self.epsilon_decay = 0.999
+        self.epsilon_decay = 0.90
         self.epsilon_min = 0.01
         self.batch_size = 64
         self.min_size_of_memory_before_training = 1000  # should be way bigger than batch_size, but smaller than memory
@@ -130,9 +130,9 @@ class DeepQLearningTrader(ITrader):
             self.vote_map[expertA_voteB] + self.vote_map[expertB_voteB],
         ]])
 
-        # do action 0 or 1?
+        # TODO Create actions for current state and decrease epsilon for fewer random actions
         predictions = self.model.predict(state)
-        '''
+
         if random.random() < self.epsilon:
             # use random actions for A and B
             action_A = random.randrange(2)
@@ -141,9 +141,10 @@ class DeepQLearningTrader(ITrader):
             # use prediction actions
             action_A = np.argmax(predictions[0][0:2])
             action_B = np.argmax(predictions[0][2:4])
-        '''
-        action_A = np.argmax(predictions[0][0:2])
-        action_B = np.argmax(predictions[0][2:4])
+
+        #action_A = np.argmax(predictions[0][0:2])
+        #action_B = np.argmax(predictions[0][2:4])
+
 
         current_price_a = stock_market_data.get_most_recent_price(Company.A)
         current_price_b = stock_market_data.get_most_recent_price(Company.B)
@@ -180,14 +181,20 @@ class DeepQLearningTrader(ITrader):
         else:
             assert False
 
+        if self.epsilon > self.epsilon_min:
+            self.epsilon *= self.epsilon_decay
+
         if self.last_state is not None:
             # train
             diff_a = (current_price_a / self.last_price_a - 1)
             diff_b = (current_price_b / self.last_price_b - 1)
             reward_vec = np.array([[diff_a, -diff_a, diff_b, -diff_b]])
             #reward_vec = np.array([[portfolio.get_value(stock_market_data)]])
-            self.model.fit(self.last_state, reward_vec)
+            self.model.fit(self.last_state, reward_vec, verbose=0)
         
+
+
+        # TODO Save created state, actions and portfolio value for the next call of trade()
         self.last_state = state
         self.last_action_a = action_A
         self.last_action_b = action_B
@@ -200,9 +207,6 @@ class DeepQLearningTrader(ITrader):
 
         # TODO Store state as experience (memory) and train the neural network only if trade() was called before at least once
 
-        # TODO Create actions for current state and decrease epsilon for fewer random actions
-
-        # TODO Save created state, actions and portfolio value for the next call of trade()
 
 
 # This method retrains the traders from scratch using training data from TRAINING and test data from TESTING

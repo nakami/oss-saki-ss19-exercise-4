@@ -186,7 +186,7 @@ class DeepQLearningTrader(ITrader):
             diff_b = (current_price_b / self.last_price_b - 1)
             reward_vec = np.array([[diff_a, -diff_a, diff_b, -diff_b]])
             #reward_vec = np.array([[portfolio.get_value(stock_market_data)]])
-            self.model.fit(self.last_state, reward_vec)
+            self.model.fit(self.last_state, reward_vec, verbose=0)
         
         self.last_state = state
         self.last_action_a = action_A

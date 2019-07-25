@@ -49,8 +49,8 @@ class DeepQLearningTrader(ITrader):
         self.train_while_trading = train_while_trading
 
         # Parameters for neural network
-        self.state_size = 2
-        self.action_size = 4
+        self.state_size = 1
+        self.action_size = 2
         self.hidden_size = 50
 
         # Parameters for deep Q-learning
@@ -68,7 +68,6 @@ class DeepQLearningTrader(ITrader):
         self.last_action_b = None
         self.last_portfolio_value = None
         self.last_price_a = None
-        self.last_price_b = None
 
         # Create main model, either as trained model (from file) or as untrained model (from scratch)
         self.model = None
@@ -118,47 +117,26 @@ class DeepQLearningTrader(ITrader):
         # output layer: 2 ([buy_A, sell_A])
 
         # TODO Compute the current state
-        stock_data_A = stock_market_data[Company.A]
-        expertA_voteA = self.expert_a.vote(stock_data_A)
-        expertB_voteA = self.expert_b.vote(stock_data_A)
-        stock_data_B = stock_market_data[Company.B]
-        expertA_voteB = self.expert_a.vote(stock_data_B)
-        expertB_voteB = self.expert_b.vote(stock_data_B)
-
-        state = np.array([[
-            self.vote_map[expertA_voteA] + self.vote_map[expertB_voteA],
-            self.vote_map[expertA_voteB] + self.vote_map[expertB_voteB],
-        ]])
+        stock_data_a = stock_market_data[Company.A]
+        vote_a_for_a = self.expert_a.vote(stock_data_a)
+        vote_b_for_a = self.expert_b.vote(stock_data_a)
+        #stock_data_b = stock_market_data[Company.B]
+        #vote_b = self.expert_a.vote(stock_data_b)
+        state = np.array([[self.vote_map[vote_a_for_a] + self.vote_map[vote_b_for_a]]])#, self.vote_map[vote_b]])
 
         # do action 0 or 1?
         predictions = self.model.predict(state)
-        '''
-        if random.random() < self.epsilon:
-            # use random actions for A and B
-            action_A = random.randrange(2)
-            action_B = random.randrange(2)
-        else:
-            # use prediction actions
-            action_A = np.argmax(predictions[0][0:2])
-            action_B = np.argmax(predictions[0][2:4])
-        '''
-        action_A = np.argmax(predictions[0][0:2])
-        action_B = np.argmax(predictions[0][2:4])
+        action = np.argmax(predictions)
 
         current_price_a = stock_market_data.get_most_recent_price(Company.A)
-        current_price_b = stock_market_data.get_most_recent_price(Company.B)
-
-        money_to_spend = portfolio.cash
         order_list = []
 
-        # do stuff for A
-        if action_A == 0:
+        if action == 0:
             # buy all A
-            amount_to_buy = money_to_spend // current_price_a
+            amount_to_buy = portfolio.cash // current_price_a
             if amount_to_buy > 0:
-                money_to_spend -= amount_to_buy * current_price_a
                 order_list.append(Order(OrderType.BUY, Company.A, amount_to_buy))
-        elif action_A == 1:
+        elif action == 1:
             # sell all A
             amount_to_sell = portfolio.get_stock(Company.A)
             if amount_to_sell > 0:
@@ -166,35 +144,22 @@ class DeepQLearningTrader(ITrader):
         else:
             assert False
 
-        # do stuff for B
-        if action_B == 0:
-            # buy all B
-            amount_to_buy = money_to_spend // current_price_b
-            if amount_to_buy > 0:
-                order_list.append(Order(OrderType.BUY, Company.B, amount_to_buy))
-        elif action_B == 1:
-            # sell all B
-            amount_to_sell = portfolio.get_stock(Company.B)
-            if amount_to_sell > 0:
-                order_list.append(Order(OrderType.SELL, Company.B, amount_to_sell))
-        else:
-            assert False
-
         if self.last_state is not None:
             # train
             diff_a = (current_price_a / self.last_price_a - 1)
-            diff_b = (current_price_b / self.last_price_b - 1)
-            reward_vec = np.array([[diff_a, -diff_a, diff_b, -diff_b]])
+            if self.last_action_a == 0:
+                rec_vec = np.array([[diff_a, -diff_a]])
+            elif self.last_action_a == 1:
+                rec_vec = np.array([[diff_a, -diff_a]])
+            else:
+                assert False # wtf
             #reward_vec = np.array([[portfolio.get_value(stock_market_data)]])
-            self.model.fit(self.last_state, reward_vec)
+            self.model.fit(self.last_state, rec_vec)
         
         self.last_state = state
-        self.last_action_a = action_A
-        self.last_action_b = action_B
+        self.last_action_a = action
         self.last_portfolio_value = portfolio.get_value(stock_market_data)
         self.last_price_a = current_price_a
-        self.last_price_b = current_price_b
-
 
         return order_list
 
@@ -206,7 +171,7 @@ class DeepQLearningTrader(ITrader):
 
 
 # This method retrains the traders from scratch using training data from TRAINING and test data from TESTING
-EPISODES = 5
+EPISODES = 1
 if __name__ == "__main__":
     # Create the training data and testing data
     # Hint: You can crop the training data with training_data.deepcopy_first_n_items(n)
@@ -243,7 +208,7 @@ if __name__ == "__main__":
 
     from matplotlib import pyplot as plt
 
-    plt.figure(figsize=(7, 5))
+    plt.figure()
     plt.plot(final_values_training, label='training', color="black")
     plt.plot(final_values_test, label='test', color="green")
     plt.title('final portfolio value training vs. final portfolio value test')
