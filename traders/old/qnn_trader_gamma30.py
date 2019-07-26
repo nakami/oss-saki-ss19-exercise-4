@@ -55,13 +55,13 @@ class DeepQLearningTrader(ITrader):
 
         # Parameters for deep Q-learning
         self.learning_rate = 0.001
-        self.epsilon = 0.0
+        self.epsilon = 1.0
         self.epsilon_decay = 0.999
         self.epsilon_min = 0.01
-        self.batch_size = 16
+        self.batch_size = 64
         self.min_size_of_memory_before_training = 1000  # should be way bigger than batch_size, but smaller than memory
         self.memory = deque(maxlen=2000)
-        self.gamma = 0.5
+        self.gamma = 0.3
 
         # Attributes necessary to remember our last actions and fill our memory with experiences
         self.last_state = None
@@ -133,8 +133,7 @@ class DeepQLearningTrader(ITrader):
 
         # do action 0 or 1?
         predictions = self.model.predict(state)
-
-        # TODO Create actions for current state and decrease epsilon for fewer random actions
+        '''
         if random.random() < self.epsilon:
             # use random actions for A and B
             action_A = random.randrange(2)
@@ -143,8 +142,9 @@ class DeepQLearningTrader(ITrader):
             # use prediction actions
             action_A = np.argmax(predictions[0][0:2])
             action_B = np.argmax(predictions[0][2:4])
-        if self.epsilon > self.epsilon_min:
-            self.epsilon *= self.epsilon_decay
+        '''
+        action_A = np.argmax(predictions[0][0:2])
+        action_B = np.argmax(predictions[0][2:4])
 
         current_price_a = stock_market_data.get_most_recent_price(Company.A)
         current_price_b = stock_market_data.get_most_recent_price(Company.B)
@@ -181,44 +181,43 @@ class DeepQLearningTrader(ITrader):
         else:
             assert False
 
-        # TODO train the neural network only if trade() was called before at least once
         if self.last_state is not None:
             # train
             diff_a = (current_price_a / self.last_price_a - 1)
             diff_b = (current_price_b / self.last_price_b - 1)
-            fut_reward_a = np.max(predictions[0][0:2])
-            fut_reward_b = np.max(predictions[0][2:4])
+            fut_reward_a_buy = np.max(predictions[0][0])
+            fut_reward_a_buy = fut_reward_a_buy if fut_reward_a_buy > 0 else 0
+            fut_reward_a_sell = np.max(predictions[0][1])
+            fut_reward_a_sell = fut_reward_a_sell if fut_reward_a_sell > 0 else 0
+            fut_reward_b_buy = np.max(predictions[0][2])
+            fut_reward_b_buy = fut_reward_b_buy if fut_reward_b_buy > 0 else 0
+            fut_reward_b_sell = np.max(predictions[0][3])
+            fut_reward_b_sell = fut_reward_b_sell if fut_reward_b_sell > 0 else 0
             reward_vec = np.array([[
-                diff_a + self.gamma * fut_reward_a,
-                -diff_a + self.gamma * fut_reward_a,
-                diff_b + self.gamma * fut_reward_b,
-                -diff_b  + self.gamma * fut_reward_b
+                diff_a + self.gamma * fut_reward_a_buy,
+                -diff_a + self.gamma * fut_reward_a_sell,
+                diff_b + self.gamma * fut_reward_b_buy,
+                -diff_b  + self.gamma * fut_reward_b_sell
                 ]])
-
-            # TODO Store state as experience (memory) and replay
-            # slides: <s, a, r, s'>
-            # mine: <s, r>
-            if self.min_size_of_memory_before_training <= len(self.memory):
-                # take self.batch_size - 1 from memory
-                batch = random.sample(self.memory, self.batch_size - 1)
-                # append current state, reward
-                batch.append((self.last_state, reward_vec))
-                for x, y in batch:
-                    self.model.fit(x, y, batch_size=self.batch_size, verbose=0)
-            else:
-                # only train with current (state, reward)
-                self.model.fit(self.last_state, reward_vec, batch_size=1, verbose=0)
-
-            self.memory.append((self.last_state, reward_vec))
-
-        # TODO Save created state, actions and portfolio value for the next call of trade()
+            #reward_vec = np.array([[portfolio.get_value(stock_market_data)]])
+            self.model.fit(self.last_state, reward_vec, verbose=0)
+        
         self.last_state = state
         self.last_action_a = action_A
         self.last_action_b = action_B
         self.last_portfolio_value = portfolio.get_value(stock_market_data)
         self.last_price_a = current_price_a
         self.last_price_b = current_price_b
+
+
         return order_list
+
+        # TODO Store state as experience (memory) and train the neural network only if trade() was called before at least once
+
+        # TODO Create actions for current state and decrease epsilon for fewer random actions
+
+        # TODO Save created state, actions and portfolio value for the next call of trade()
+
 
 # This method retrains the traders from scratch using training data from TRAINING and test data from TESTING
 EPISODES = 5

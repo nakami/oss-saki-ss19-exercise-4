@@ -61,7 +61,7 @@ class DeepQLearningTrader(ITrader):
         self.batch_size = 16
         self.min_size_of_memory_before_training = 1000  # should be way bigger than batch_size, but smaller than memory
         self.memory = deque(maxlen=2000)
-        self.gamma = 0.5
+        self.gamma = 0.1
 
         # Attributes necessary to remember our last actions and fill our memory with experiences
         self.last_state = None
