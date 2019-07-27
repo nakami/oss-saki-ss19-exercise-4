@@ -121,14 +121,12 @@ class DeepQLearningTrader(ITrader):
         # TODO Compute the current state
         stock_data_A = stock_market_data[Company.A]
         expertA_voteA = self.expert_a.vote(stock_data_A)
-        expertB_voteA = self.expert_b.vote(stock_data_A)
         stock_data_B = stock_market_data[Company.B]
-        expertA_voteB = self.expert_a.vote(stock_data_B)
         expertB_voteB = self.expert_b.vote(stock_data_B)
 
         state = np.array([[
-            self.vote_map[expertA_voteA] + self.vote_map[expertB_voteA],
-            self.vote_map[expertA_voteB] + self.vote_map[expertB_voteB],
+            self.vote_map[expertA_voteA],
+            self.vote_map[expertB_voteB],
         ]])
 
         # do action 0 or 1?

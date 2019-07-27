@@ -1,5 +1,7 @@
 import copy
 from typing import Dict, List
+import os
+import matplotlib as mpl
 from matplotlib import pyplot
 from datetime import date as Date
 
@@ -106,6 +108,8 @@ class StockExchange:
 
 # This main method evaluates all traders over the testing period and visualize the results.
 if __name__ == "__main__":
+    mpl.rcParams["savefig.directory"] = os.chdir(os.path.dirname(__file__) + '\\eval')
+
     # Load stock market data for testing period
     stock_market_data = StockMarketData([Company.A, Company.B], [Period.TESTING])
 
